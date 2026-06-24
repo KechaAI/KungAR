@@ -15,27 +15,27 @@
             background-color: #f0f8ff; 
             margin: 0;
             padding: 10px;
-            overflow-x: hidden; /* ป้องกันหน้าจอเลื่อนซ้ายขวา */
+            overflow: hidden;
         }
-        h1 { color: #2E7D32; font-size: 1.5rem; margin: 10px 0 5px 0; }
-        p { font-size: 0.9rem; margin: 0 0 10px 0; color: #555; }
+        h1 { color: #2E7D32; font-size: 1.3rem; margin: 5px 0; }
+        p { font-size: 0.85rem; margin: 0 0 10px 0; color: #555; }
         
-        /* ปรับให้ Canvas ยืดหยุ่นตามความกว้างหน้าจอมือถือ */
+        /* บังคับให้จอเกมพอดีหน้าจอมือถือพอดี */
         canvas { 
             display: block;
             margin: 0 auto;
             max-width: 100%; 
             height: auto !important; 
-            border: 4px solid #4CAF50; 
-            border-radius: 10px; 
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2); 
+            border: 3px solid #4CAF50; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); 
         }
     </style>
 </head>
 <body>
 
     <h1>เกม AR: จับความดีใส่ตะกร้า</h1>
-    <p>หันกล้องหาตัวคุณ หรือให้เพื่อนถือส่อง แล้วใช้มือจับคำศัพท์ใส่ตะกร้า</p>
+    <p>ยกนิ้วชี้ของคุณส่องกล้องหน้า ลากคำศัพท์ลงตะกร้าบุญ</p>
     
     <script>
         let video;
@@ -43,45 +43,37 @@
         let predictions = [];
         let score = 0;
         
-        // วัตถุจำลอง (ความดี)
-        let goodDeed = {
-            x: 200, y: 50, size: 70, text: "แบ่งปัน", isCaught: false
-        };
-        
-        // ตะกร้าเป้าหมาย (ปรับตำแหน่งให้อยู่ตรงกลางด้านล่างของจอ 400x533)
-        let basket = { x: 125, y: 400, w: 150, h: 90 };
+        let goodDeed = { x: 200, y: 60, size: 75, text: "แบ่งปัน", isCaught: false };
+        let basket = { x: 110, y: 410, w: 180, h: 90 };
 
         function setup() {
-            // 2. ปรับสัดส่วนเป็นแนวตั้ง (400 x 533) เพื่อให้เหมาะกับหน้าจอมือถือ
-            createCanvas(400, 533);
+            // ตั้งขนาดแนวตั้งให้เหมาะกับหน้าจอมือถือทั่วไป
+            createCanvas(400, 520);
             textFont('Tahoma'); 
             
-            // 3. ตั้งค่ากล้องสำหรับมือถือ (กำหนดให้ใช้กล้องหน้า 'user' เพื่อให้ผู้เล่นเห็นตัวเองเหมือนกระจก)
-            // หากต้องการเปลี่ยนเป็นกล้องหลังให้เปลี่ยน 'user' เป็น 'environment'
+            // 🔒 บังคับใช้ "กล้องหน้า" (facingMode: 'user') 
             let constraints = {
                 video: {
                     facingMode: 'user',
                     width: { ideal: 400 },
-                    height: { ideal: 533 }
+                    height: { ideal: 520 }
                 },
                 audio: false
             };
             
-            video = createCapture(constraints);
+            video = createCapture(constraints, function(stream) {
+                console.log("กล้องหน้าทำงานสำเร็จ!");
+            });
             video.size(width, height);
             video.hide(); 
 
-            // โหลดโมเดลจับภาพมือ
-            handpose = ml5.handpose(video, modelReady);
+            // เรียก AI ตรวจจับมือ
+            handpose = ml5.handpose(video, () => console.log("AI พร้อมใช้งาน!"));
             handpose.on("predict", results => { predictions = results; });
         }
 
-        function modelReady() {
-            console.log("โมเดลพร้อมใช้งานบนมือถือแล้ว!");
-        }
-
         function draw() {
-            // วาดภาพจากกล้องหน้า (กลับด้านซ้ายขวาเพื่อให้เหมือนกระจกเงา เล่นง่ายกว่า)
+            // 🪞 กลับด้านซ้ายขวาเพื่อให้เป็นกระจกเงา (เล่นกล้องหน้าจะไม่งง)
             push();
             translate(width, 0);
             scale(-1, 1);
@@ -89,8 +81,8 @@
             pop();
 
             // วาดตะกร้าบุญ
-            fill(255, 204, 0, 200);
-            rect(basket.x, basket.y, basket.w, basket.h, 20);
+            fill(255, 193, 7, 220);
+            rect(basket.x, basket.y, basket.w, basket.h, 15);
             fill(0);
             textSize(22);
             textAlign(CENTER, CENTER);
@@ -105,34 +97,35 @@
             text("คะแนนบุญ: " + score, 20, 20);
             noStroke(); 
 
-            // ลอจิกการร่วงของวัตถุ
+            // ลอจิกการหล่นของลูกบอลความดี
             if (!goodDeed.isCaught) {
-                goodDeed.y += 4; // ความเร็วในการร่วงบนจอมือถือ
+                goodDeed.y += 3.5; 
                 if (goodDeed.y > height) { 
-                    goodDeed.y = 50; 
-                    goodDeed.x = random(40, width - 40); 
+                    goodDeed.y = 60; 
+                    goodDeed.x = random(50, width - 50); 
                 }
             }
 
-            // วาดวัตถุ "ความดี"
-            fill(100, 255, 100, 220);
+            // วาดวัตถุความดี
+            fill(76, 175, 80, 230);
             ellipse(goodDeed.x, goodDeed.y, goodDeed.size);
-            fill(0);
+            fill(255);
             textSize(18);
             textAlign(CENTER, CENTER);
             text(goodDeed.text, goodDeed.x, goodDeed.y);
 
-            // ตรวจจับตำแหน่งมือ
+            // เมื่อ AI เจอภาพมือบนหน้าจอ
             if (predictions.length > 0) {
                 let indexFinger = predictions[0].annotations.indexFinger[3];
-                // แปลงพิกัดตามการกลับด้านของกล้องหน้า
+                // คำนวณพิกัดตามการกลับกระจกเงา
                 let handX = width - indexFinger[0]; 
                 let handY = indexFinger[1];
 
-                // จุดจับพิกัดปลายนิ้ว
-                fill(255, 0, 0);
-                ellipse(handX, handY, 22, 22);
+                // วาดเป้าเล็งสีแดงที่ปลายนิ้วชี้
+                fill(244, 67, 54);
+                ellipse(handX, handY, 20, 20);
 
+                // เช็คระยะชนระหว่างนิ้วมือกับวัตถุ
                 if (!goodDeed.isCaught) {
                     let d = dist(handX, handY, goodDeed.x, goodDeed.y);
                     if (d < goodDeed.size / 2) {
@@ -140,20 +133,22 @@
                     }
                 }
                 
+                // ถ้านิ้วแตะโดนแล้ว วัตถุจะย้ายตามนิ้ว
                 if (goodDeed.isCaught) {
                     goodDeed.x = handX;
                     goodDeed.y = handY;
                     
-                    // ตรวจสอบการลงตะกร้า
+                    // เช็คเงื่อนไขเมื่อลากมาถึงตะกร้า
                     if (handX > basket.x && handX < basket.x + basket.w && 
                         handY > basket.y && handY < basket.y + basket.h) {
                         score += 10;
                         goodDeed.isCaught = false;
-                        goodDeed.y = 50;
-                        goodDeed.x = random(40, width - 40);
+                        goodDeed.y = 60;
+                        goodDeed.x = random(50, width - 50);
                     }
                 }
             } else {
+                // เอามือออกจากกล้อง = ปล่อยวัตถุร่วงลงมา
                 goodDeed.isCaught = false;
             }
         }
