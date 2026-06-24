@@ -6,7 +6,6 @@
     <title>AR เกมธรรมะ: ตะกร้าแห่งความดี</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
-    <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
     
     <style>
         body { 
@@ -16,11 +15,12 @@
             margin: 0;
             padding: 10px;
             overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
         }
         h1 { color: #2E7D32; font-size: 1.3rem; margin: 5px 0; }
         p { font-size: 0.85rem; margin: 0 0 10px 0; color: #555; }
         
-        /* ปรับเฟรมหน้าจอเกมให้พอดีกับโทรศัพท์มือถือ */
         canvas { 
             display: block;
             margin: 0 auto;
@@ -35,24 +35,22 @@
 <body>
 
     <h1>เกม AR: จับความดีใส่ตะกร้า</h1>
-    <p id="status">กำลังโหลดระบบ AI กล้องหน้า... โปรดรอสักครู่</p>
+    <p>ใช้นิ้วแตะที่ลูกบอลความดีบนหน้าจอ แล้วลากลงตะกร้าบุญ!</p>
     
     <script>
         let video;
-        let handpose;
-        let predictions = [];
         let score = 0;
-        let isModelLoaded = false;
         
-        let goodDeed = { x: 200, y: 60, size: 75, text: "แบ่งปัน", isCaught: false };
+        // วัตถุความดี
+        let goodDeed = { x: 200, y: 60, size: 80, text: "แบ่งปัน", isCaught: false };
+        // ตะกร้าบุญ
         let basket = { x: 110, y: 410, w: 180, h: 90 };
 
         function setup() {
-            // สร้าง Canvas ขนาดแนวตั้งเหมาะกับจอมือถือ
             createCanvas(400, 520);
             textFont('Tahoma'); 
             
-            // ตั้งค่าบังคับเปิดกล้องหน้า (facingMode: 'user')
+            // เรียกเปิดกล้องหน้า
             let constraints = {
                 video: {
                     facingMode: 'user',
@@ -62,26 +60,13 @@
                 audio: false
             };
             
-            video = createCapture(constraints, function(stream) {
-                console.log("เปิดกล้องหน้าสำเร็จ");
-            });
+            video = createCapture(constraints);
             video.size(width, height);
             video.hide(); 
-
-            // เรียกใช้งาน Handpose Model
-            handpose = ml5.handpose(video, modelReady);
-            handpose.on("predict", results => { predictions = results; });
-        }
-
-        function modelReady() {
-            console.log("โมเดล AI โหลดเสร็จสิ้น!");
-            isModelLoaded = true;
-            // เปลี่ยนข้อความบอกผู้เล่นเมื่อระบบพร้อม
-            document.getElementById("status").innerText = "ยกนิ้วชี้ขึ้นมาส่องกล้อง แล้วลากคำศัพท์ลงตะกร้าบุญ";
         }
 
         function draw() {
-            // กลับด้านภาพกล้องหน้าเพื่อให้เป็นกระจกเงา (เล่นง่าย ไม่สับสนซ้ายขวา)
+            // วาดภาพกล้องหน้าแบบกระจกเงาด้านหลังวัตถุ
             push();
             translate(width, 0);
             scale(-1, 1);
@@ -96,7 +81,7 @@
             textAlign(CENTER, CENTER);
             text("ตะกร้าบุญ", basket.x + basket.w/2, basket.y + basket.h/2);
 
-            // แสดงคะแนนบุญ
+            // แสดงคะแนน
             fill(255);
             stroke(0);
             strokeWeight(4);
@@ -105,15 +90,23 @@
             text("คะแนนบุญ: " + score, 20, 20);
             noStroke(); 
 
-            // ถ้า AI ยังโหลดไม่เสร็จ จะยังไม่ปล่อยวัตถุลงมา
-            if (!isModelLoaded) return;
+            // ลอจิกควบคุมการลากและการหล่น
+            if (goodDeed.isCaught) {
+                // ถ้าใช้นิ้วลาก ให้ตำแหน่งเคลื่อนที่ตามนิ้ว (รองรับทั้งเมาส์และทัชสกรีน)
+                goodDeed.x = mouseX;
+                goodDeed.y = mouseY;
 
-            // ลอจิกการหล่นของลูกบอลความดี
-            if (!goodDeed.isCaught) {
-                goodDeed.y += 3.5; 
+                // ตรวจสอบว่าลากลงตะกร้าหรือยัง
+                if (goodDeed.x > basket.x && goodDeed.x < basket.x + basket.w && 
+                    goodDeed.y > basket.y && goodDeed.y < basket.y + basket.h) {
+                    score += 10;
+                    resetGoodDeed();
+                }
+            } else {
+                // ถ้าไม่มีใครจับ ให้ร่วงลงมาเรื่อยๆ
+                goodDeed.y += 4; 
                 if (goodDeed.y > height) { 
-                    goodDeed.y = 60; 
-                    goodDeed.x = random(50, width - 50); 
+                    resetGoodDeed();
                 }
             }
 
@@ -124,44 +117,28 @@
             textSize(18);
             textAlign(CENTER, CENTER);
             text(goodDeed.text, goodDeed.x, goodDeed.y);
+        }
 
-            // เมื่อกล้องตรวจจับเจอตำแหน่งมือ
-            if (predictions.length > 0) {
-                let indexFinger = predictions[0].annotations.indexFinger[3];
-                // คำนวณพิกัดให้ตรงกับการกลับด้านแบบกระจกเงา
-                let handX = width - indexFinger[0]; 
-                let handY = indexFinger[1];
-
-                // วาดเป้าเล็งสีแดงที่ปลายนิ้วชี้ของผู้เล่น
-                fill(244, 67, 54);
-                ellipse(handX, handY, 20, 20);
-
-                // ตรวจสอบว่านิ้วชี้ชนกับลูกบอลความดีหรือไม่
-                if (!goodDeed.isCaught) {
-                    let d = dist(handX, handY, goodDeed.x, goodDeed.y);
-                    if (d < goodDeed.size / 2) {
-                        goodDeed.isCaught = true;
-                    }
-                }
-                
-                // ถ้านิ้วจับลูกบอลอยู่ ให้วัตถุเคลื่อนที่ตามนิ้วมือ
-                if (goodDeed.isCaught) {
-                    goodDeed.x = handX;
-                    goodDeed.y = handY;
-                    
-                    // ตรวจสอบเงื่อนไขเมื่อลากลูกบอลมาใส่ในตะกร้าบุญ
-                    if (handX > basket.x && handX < basket.x + basket.w && 
-                        handY > basket.y && handY < basket.y + basket.h) {
-                        score += 10;
-                        goodDeed.isCaught = false;
-                        goodDeed.y = 60;
-                        goodDeed.x = random(50, width - 50);
-                    }
-                }
-            } else {
-                // หากผู้เล่นเอามือออกจากรัศมีกล้อง ให้ปล่อยวัตถุร่วงลงตามแรงโน้มถ่วง
-                goodDeed.isCaught = false;
+        // เช็คการจิ้มหรือทัชหน้าจอโดนลูกบอล
+        function mousePressed() {
+            let d = dist(mouseX, mouseY, goodDeed.x, goodDeed.y);
+            if (d < goodDeed.size / 2) {
+                goodDeed.isCaught = true;
             }
+        }
+
+        // เมื่อปล่อยนิ้ว
+        function mouseReleased() {
+            goodDeed.isCaught = false;
+        }
+
+        // ฟังก์ชันสุ่มตำแหน่งและคำศัพท์ใหม่
+        function resetGoodDeed() {
+            let words = ["แบ่งปัน", "เมตตา", "ซื่อสัตย์", "กตัญญู", "ให้อภัย", "พูดความจริง"];
+            goodDeed.text = random(words); // สุ่มคำศัพท์ธรรมะใหม่ไปเลยเพื่อความสนุก
+            goodDeed.isCaught = false;
+            goodDeed.y = 60;
+            goodDeed.x = random(50, width - 50);
         }
     </script>
 </body>
