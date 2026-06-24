@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AR เกมธรรมะ: ตะกร้าแห่งความดี</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>
+    
+    <style>
+        body { 
+            text-align: center; 
+            font-family: 'Tahoma', 'Leelawadee', sans-serif; 
+            background-color: #f0f8ff; 
+            margin: 0;
+            padding: 10px;
+            overflow-x: hidden; /* ป้องกันหน้าจอเลื่อนซ้ายขวา */
+        }
+        h1 { color: #2E7D32; font-size: 1.5rem; margin: 10px 0 5px 0; }
+        p { font-size: 0.9rem; margin: 0 0 10px 0; color: #555; }
+        
+        /* ปรับให้ Canvas ยืดหยุ่นตามความกว้างหน้าจอมือถือ */
+        canvas { 
+            display: block;
+            margin: 0 auto;
+            max-width: 100%; 
+            height: auto !important; 
+            border: 4px solid #4CAF50; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2); 
+        }
+    </style>
+</head>
+<body>
+
+    <h1>เกม AR: จับความดีใส่ตะกร้า</h1>
+    <p>หันกล้องหาตัวคุณ หรือให้เพื่อนถือส่อง แล้วใช้มือจับคำศัพท์ใส่ตะกร้า</p>
+    
+    <script>
+        let video;
+        let handpose;
+        let predictions = [];
+        let score = 0;
+        
+        // วัตถุจำลอง (ความดี)
+        let goodDeed = {
+            x: 200, y: 50, size: 70, text: "แบ่งปัน", isCaught: false
+        };
+        
+        // ตะกร้าเป้าหมาย (ปรับตำแหน่งให้อยู่ตรงกลางด้านล่างของจอ 400x533)
+        let basket = { x: 125, y: 400, w: 150, h: 90 };
+
+        function setup() {
+            // 2. ปรับสัดส่วนเป็นแนวตั้ง (400 x 533) เพื่อให้เหมาะกับหน้าจอมือถือ
+            createCanvas(400, 533);
+            textFont('Tahoma'); 
+            
+            // 3. ตั้งค่ากล้องสำหรับมือถือ (กำหนดให้ใช้กล้องหน้า 'user' เพื่อให้ผู้เล่นเห็นตัวเองเหมือนกระจก)
+            // หากต้องการเปลี่ยนเป็นกล้องหลังให้เปลี่ยน 'user' เป็น 'environment'
+            let constraints = {
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 400 },
+                    height: { ideal: 533 }
+                },
+                audio: false
+            };
+            
+            video = createCapture(constraints);
+            video.size(width, height);
+            video.hide(); 
+
+            // โหลดโมเดลจับภาพมือ
+            handpose = ml5.handpose(video, modelReady);
+            handpose.on("predict", results => { predictions = results; });
+        }
+
+        function modelReady() {
+            console.log("โมเดลพร้อมใช้งานบนมือถือแล้ว!");
+        }
+
+        function draw() {
+            // วาดภาพจากกล้องหน้า (กลับด้านซ้ายขวาเพื่อให้เหมือนกระจกเงา เล่นง่ายกว่า)
+            push();
+            translate(width, 0);
+            scale(-1, 1);
+            image(video, 0, 0, width, height);
+            pop();
+
+            // วาดตะกร้าบุญ
+            fill(255, 204, 0, 200);
+            rect(basket.x, basket.y, basket.w, basket.h, 20);
+            fill(0);
+            textSize(22);
+            textAlign(CENTER, CENTER);
+            text("ตะกร้าบุญ", basket.x + basket.w/2, basket.y + basket.h/2);
+
+            // แสดงคะแนน
+            fill(255);
+            stroke(0);
+            strokeWeight(4);
+            textSize(24);
+            textAlign(LEFT, TOP);
+            text("คะแนนบุญ: " + score, 20, 20);
+            noStroke(); 
+
+            // ลอจิกการร่วงของวัตถุ
+            if (!goodDeed.isCaught) {
+                goodDeed.y += 4; // ความเร็วในการร่วงบนจอมือถือ
+                if (goodDeed.y > height) { 
+                    goodDeed.y = 50; 
+                    goodDeed.x = random(40, width - 40); 
+                }
+            }
+
+            // วาดวัตถุ "ความดี"
+            fill(100, 255, 100, 220);
+            ellipse(goodDeed.x, goodDeed.y, goodDeed.size);
+            fill(0);
+            textSize(18);
+            textAlign(CENTER, CENTER);
+            text(goodDeed.text, goodDeed.x, goodDeed.y);
+
+            // ตรวจจับตำแหน่งมือ
+            if (predictions.length > 0) {
+                let indexFinger = predictions[0].annotations.indexFinger[3];
+                // แปลงพิกัดตามการกลับด้านของกล้องหน้า
+                let handX = width - indexFinger[0]; 
+                let handY = indexFinger[1];
+
+                // จุดจับพิกัดปลายนิ้ว
+                fill(255, 0, 0);
+                ellipse(handX, handY, 22, 22);
+
+                if (!goodDeed.isCaught) {
+                    let d = dist(handX, handY, goodDeed.x, goodDeed.y);
+                    if (d < goodDeed.size / 2) {
+                        goodDeed.isCaught = true;
+                    }
+                }
+                
+                if (goodDeed.isCaught) {
+                    goodDeed.x = handX;
+                    goodDeed.y = handY;
+                    
+                    // ตรวจสอบการลงตะกร้า
+                    if (handX > basket.x && handX < basket.x + basket.w && 
+                        handY > basket.y && handY < basket.y + basket.h) {
+                        score += 10;
+                        goodDeed.isCaught = false;
+                        goodDeed.y = 50;
+                        goodDeed.x = random(40, width - 40);
+                    }
+                }
+            } else {
+                goodDeed.isCaught = false;
+            }
+        }
+    </script>
+</body>
+</html>
